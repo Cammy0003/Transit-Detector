@@ -1,0 +1,8 @@
+[package]
+name = "transit_detector_draft_1"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+fitsio = "0.21.7"
+plotters = { version = "0.3", features = ["line_series", "bitmap_encoder"] }
