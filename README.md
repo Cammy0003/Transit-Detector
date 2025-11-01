@@ -1,7 +1,7 @@
 # Transit Detector
 
 Cameron Emmanuel
-October 29, 2025 - 
+October 29, 2025 
 
 ---
 
