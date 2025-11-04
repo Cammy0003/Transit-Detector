@@ -17,11 +17,12 @@ fn filter_and_sort_tess_data(flux: Vec<f64>, time: Vec<f64>, qual: Vec<i32>) -> 
         .filter(|&i| qual[i] == 0 && time[i].is_finite() && flux[i].is_finite())
         .collect();
 
-    let t_good: Vec<f64> = good_indices.iter().map(|&i| time[i]).collect();
-    let f_good: Vec<f64> = good_indices.iter().map(|&i| flux[i]).collect();
+    let mut paired: Vec<(f64, f64)> = good_indices
+        .iter()
+        .map(|&i| (time[i], flux[i]))
+        .collect();
 
-    let mut paired: Vec<(f64, f64)> = t_good.iter().cloned().zip(f_good.iter().cloned()).collect();
-    paired.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    paired.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
 
     let (t_sorted, f_sorted): (Vec<f64>, Vec<f64>) = paired.into_iter().unzip();
 
@@ -29,9 +30,7 @@ fn filter_and_sort_tess_data(flux: Vec<f64>, time: Vec<f64>, qual: Vec<i32>) -> 
 }
 
 fn median(v: &mut Vec<f64>) -> Option<f64> {
-    if v.is_empty() {
-        return None;
-    }
+    if v.is_empty() { return None; }
     v.sort_by(|a, b| a.partial_cmp(b).unwrap());
     let mid = v.len() / 2;
     if v.len() % 2 == 0 {
@@ -66,7 +65,64 @@ fn segment_on_gaps(t: &[f64], dt_med: f64, gap_factor: f64) -> Vec<(usize, usize
     }
 
     segment_bounds.push((start, t.len()));
-    segment_bounds
+    return segment_bounds;
+}
+
+struct NormSegment<'a> {
+    t: &'a [f64],
+    f_raw: &'a [f64],
+    f_norm: Vec<f64>,
+    med: f64,
+}
+
+fn mad_segments_norm(f_norm: &[f64]) -> Option<f64> {
+    if f_norm.is_empty() { return None; }
+    let mut devs: Vec<f64> = f_norm
+        .iter()
+        .copied()
+        .filter(|f| f.is_finite())
+        .map(f64::abs).collect();
+    if devs.is_empty() { return None; }
+    median(&mut devs)
+}
+
+impl<'a> NormSegment<'a> {
+    fn segment_noise_clean(&mut self, k: f64){
+        let Some(mad) = mad_segments_norm(&self.f_norm) else { return };
+        let sigma = 1.4826 * mad;
+        let threshold = k * sigma;
+
+        for f in self.f_norm.iter_mut() {
+            if !f.is_finite() || f.abs() > threshold {
+                *f = f64::NAN;
+            }
+        }
+    }
+}
+
+fn normalize_segments<'a>(
+    t: &'a [f64],
+    f: &'a [f64],
+    segs: &[(usize, usize)]
+) -> Vec<NormSegment<'a>> {
+    let mut out = Vec::with_capacity(segs.len());
+
+    for &(s, e) in segs {
+        let f_seg = &f[s..e];
+        let mut temp: Vec<f64> = f_seg.iter().copied().collect();
+        let med = median(&mut temp).expect("empty segment");
+        assert!(med.is_finite() && med != 0.0, "segment median zero or infinite; normalization blow up");
+        let inv = 1.0 / med;
+        let f_norm: Vec<f64> = f_seg.iter().map(|&f| inv * f - 1.0).collect();
+
+        out.push(NormSegment {
+            t: &t[s..e],
+            f_raw: f_seg,
+            f_norm,
+            med
+        });
+    }
+    return out;
 }
 
 fn main() -> fitsio::errors::Result<()> {
@@ -79,14 +135,24 @@ fn main() -> fitsio::errors::Result<()> {
     // fptr.pretty_print()?;
 
     let (t, f, q) = load_tess_data(&mut fptr)?;
+    assert_eq!(t.len(), f.len(), "time/flux length mismatch");
+    assert_eq!(t.len(), q.len(), "time/quality length mismatch");
+
     let (t, f) = filter_and_sort_tess_data(f, t, q)?;
+    assert_eq!(t.len(), f.len(), "time/flux length mismatch");
     assert!(t.iter().all(|&val| !val.is_nan() && val.is_finite()), "NaN or infinite in t");
-    assert!(f.iter().all(|&val| !val.is_nan()), "NaN detected in t");
+    assert!(f.iter().all(|&val| !val.is_nan()), "NaN detected in f");
     assert!(t.windows(2).all(|w| w[1] > w[0]), "t is not chronological");
 
     let dt_med = median_cadence(&t).expect("median cadence not found");
     let gap_factor = 5.0;
     let seg_bounds = segment_on_gaps(&t, dt_med, gap_factor); // dt_med loses ownership
+
+    let mut norm_segments: Vec<NormSegment> = normalize_segments(&t, &f, &seg_bounds);
+
+    for seg in norm_segments.iter_mut() {
+        seg.segment_noise_clean(6.0);
+    }
 
     Ok(())
 }

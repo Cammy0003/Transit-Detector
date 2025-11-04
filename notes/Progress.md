@@ -27,3 +27,22 @@
    at that star. $\Delta t$ is the median cadence, wherein it is the median of all difference pairs within `t`.  
 
 ---
+
+## Nov-03-2025
+
+1. **Normalized and Centred Segments**:
+
+   Within each segment of flux data, the fluxes were normalized and centred, wherein a `NormSegments`
+   data structure was created for clarity.
+
+
+2. **Cleaned Normalized Segments**:
+
+   Cleaned the data, by computing the median absolute deviation (MAD) of each segment of flux
+   data, wherein a $\sigma = 1.4286 \times \text{MAD}$ was computed, to create a threshold
+   for all data within each segment, wherein data that exceeded $6\sigma$, is replaced by
+   `NaN`, to flag it as bad data. $k = 6$ for $k \sigma$, was chosen to ensure a conservative
+   threshold, that really only flags data from possible outliers beyond noise, such as cosmic
+   ray hits, detector glitch, etc. 
+
+---

@@ -15,7 +15,7 @@ Got it. Here’s a **lean, resume-friendly** pipeline that detects transits in T
 
 For each segment (s):
 $$
-F^{(s)}*{\text{norm}}(t) ;=; \frac{F^{(s)}*{\text{raw}}(t)}{\operatorname{median}!\big(F^{(s)}_{\text{raw}}\big)} ;-; 1
+F^{(s)}_{\text{norm}}(t) = \frac{F^{(s)}_{\text{raw}}(t)}{\operatorname{median}\big(F^{(s)}_{\text{raw}}\big)} - 1
 $$
 That’s it. Now your baseline is ~0 and “depth” is a **negative fraction** (e.g., ($-500\ \text{ppm} \approx -5\times10^{-4})$).
 
