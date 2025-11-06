@@ -130,13 +130,37 @@ fn normalize_segments<'a>(
     return out;
 }
 
-fn box_least_squares(
-    trial_periods: &[f64],
-    segment: &[NormSegment],
-    trial_durations: Vec<f64>,
+fn binning_flux(
+    trial_period: &f64,
+    flux_segment: &[f64],
+    time_segment: &[f64],
 ) -> Vec<f64> {
+    let mut phase: Vec<f64> = Vec::new();
 
-    return Vec::new();
+    for time in time_segment.iter() {
+        phase.push( (time % trial_period) / trial_period );
+    }
+
+    let n_bins = 200;
+    let start = 0.0;
+    let end = 1.0;
+
+    let divided_phase: Vec<f64> = (0..=n_bins)
+        .map(|i| start + (end - start) * i as f64 / n_bins as f64)
+        .collect();
+
+    let mut count: [i32; 200] = [0; 200];
+    let mut sum_flux: [f64; 200] = [0.0; 200];
+
+    for phase in divided_phase.iter() {
+        let bin_index: usize = (phase * n_bins.as_f64()).floor() as usize;
+        sum_flux[bin_index] += flux_segment[bin_index];
+        count[bin_index] += 1;
+    }
+
+    let binned_flux: Vec<f64> = (0..=n_bins).map(|i| sum_flux[i] / count[i] as f64).collect();
+
+    return binned_flux;
 }
 
 fn main() -> fitsio::errors::Result<()> {

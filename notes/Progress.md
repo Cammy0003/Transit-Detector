@@ -46,3 +46,14 @@
    ray hits, detector glitch, etc. 
 
 ---
+
+## Nov-05-2025
+
+1. **Binned the flux (Not finished)**
+   Created a function, that given a segment of fluxes, folds the data and bins it into so far,
+   200 points. This doesn't technically work right now, but I've played around with it enough to fix
+   it for next time.
+
+---
+
+
