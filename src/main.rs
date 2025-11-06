@@ -1,3 +1,8 @@
+/*
+    Cameron Emmanuel
+    Nov - 05 - 2025
+ */
+
 use fitsio::FitsFile;
 use fitsio::tables::Column;
 use std::path::PathBuf;
@@ -125,6 +130,15 @@ fn normalize_segments<'a>(
     return out;
 }
 
+fn box_least_squares(
+    trial_periods: &[f64],
+    segment: &[NormSegment],
+    trial_durations: Vec<f64>,
+) -> Vec<f64> {
+
+    return Vec::new();
+}
+
 fn main() -> fitsio::errors::Result<()> {
     let fits_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("data")
@@ -150,9 +164,18 @@ fn main() -> fitsio::errors::Result<()> {
 
     let mut norm_segments: Vec<NormSegment> = normalize_segments(&t, &f, &seg_bounds);
 
+    // cleaning all segments
     for seg in norm_segments.iter_mut() {
         seg.segment_noise_clean(6.0);
     }
+
+    let trial_periods: Vec<f64> = (1..=40)
+        .map(|i| i as f64 * 0.5)
+        .collect();
+
+
+
+
 
     Ok(())
 }
