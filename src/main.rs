@@ -80,15 +80,19 @@ struct NormSegment<'a> {
     med: f64,
 }
 
-fn mad_segments_norm(f_norm: &[f64]) -> Option<f64> {
-    if f_norm.is_empty() { return None; }
-    let mut devs: Vec<f64> = f_norm
+fn median_absolute_deviation(arr: &[f64], med: &f64) -> Option<f64> {
+    if arr.is_empty() { return None; }
+
+    let mut deviations: Vec<f64> = arr
         .iter()
         .copied()
         .filter(|f| f.is_finite())
-        .map(f64::abs).collect();
-    if devs.is_empty() { return None; }
-    median(&mut devs)
+        .map(|f| (f - med).abs())
+        .collect();
+
+    if deviations.is_empty() { return None; }
+
+    median(&mut deviations)
 }
 
 impl<'a> NormSegment<'a> {
@@ -108,12 +112,12 @@ impl<'a> NormSegment<'a> {
 fn normalize_segments<'a>(
     t: &'a [f64],
     f: &'a [f64],
-    segs: &[(usize, usize)]
+    segments: &[(usize, usize)]
 ) -> Vec<NormSegment<'a>> {
-    let mut out = Vec::with_capacity(segs.len());
+    let mut out = Vec::with_capacity(segments.len());
 
-    for &(s, e) in segs {
-        let f_seg = &f[s..e];
+    for &(s, e) in segments {
+        let f_seg = &f[s..e]; // check later if you need to have f[s..e+1]
         let mut temp: Vec<f64> = f_seg.iter().copied().collect();
         let med = median(&mut temp).expect("empty segment");
         assert!(med.is_finite() && med != 0.0, "segment median zero or infinite; normalization blow up");
