@@ -56,7 +56,7 @@ For a trial ($P$), compute phases ($\phi_i = \big(t_i \bmod P\big)/P \in [0,1)$)
 **Power / SNR**
 Estimate per-point noise (\sigma) from the **out-of-window** bins (MAD → ($\sigma$)). Then a simple score:
 $$
-\text{SNR}(P,d) ;=; \frac{-\hat{\delta}}{\sigma},\sqrt{N_{\text{in}}}
+\text{SNR}(P,d) = \frac{-\hat{\delta}}{\sigma}\sqrt{N_{\text{in}}}
 $$
 where ($N_{\text{in}}$) is the number of points (or total weight) inside the best window. Keep the **best SNR** over phases (found by the sliding window) for each ($(P,d)$), and then keep the best over ($d$) for each ($P$). Your **periodogram** is ($P \mapsto \max_d \text{SNR}(P,d)$).
 

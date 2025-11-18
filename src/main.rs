@@ -119,6 +119,7 @@ struct NormSegment<'a> {
     f_raw: &'a [f64],
     f_norm: Vec<f64>,
     med: f64,
+    sigma: f64,
 }
 
 fn median_absolute_deviation(arr: &[f64], med: &f64) -> Option<f64> {
@@ -139,8 +140,8 @@ fn median_absolute_deviation(arr: &[f64], med: &f64) -> Option<f64> {
 impl<'a> NormSegment<'a> {
     fn segment_noise_clean(&mut self, k: f64){
         let Some(mad) = median_absolute_deviation(&self.f_norm, &self.med) else { return };
-        let sigma = 1.4826 * mad;
-        let threshold = k * sigma;
+        self.sigma = 1.4826 * mad;
+        let threshold = k * self.sigma;
 
         for f in self.f_norm.iter_mut() {
             if !f.is_finite() || f.abs() > threshold {
@@ -169,7 +170,8 @@ fn normalize_segments<'a>(
             t: &t[s..e],
             f_raw: f_seg,
             f_norm,
-            med
+            med,
+            sigma: 0.0,
         });
     }
     return out;
@@ -212,7 +214,7 @@ fn search_bins<const N_BINS: usize>(
     trial_period: &f64,
     trial_duration: &f64,
     binned_flux: &Vec<f64>,
-) -> Option<f64> {
+) -> Option<(f64, usize)> {
 
     let window_width: usize = (((trial_duration / 24.0) / trial_period) * N_BINS as f64).round() as usize;
 
@@ -237,9 +239,14 @@ fn search_bins<const N_BINS: usize>(
         }
     }
 
-    Some(result)
+    Some((result, window_width))
 }
 
+fn signal_to_noise_ratio(
+    deepest_dip: &f64, num_points: &f64, sigma: &f64) -> Option<f64> {
+    let snr = (- deepest_dip / sigma ) * num_points.sqrt();
+    Some(snr)
+}
 
 fn main() -> fitsio::errors::Result<()> {
     let fits_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -280,6 +287,7 @@ fn main() -> fitsio::errors::Result<()> {
     // start with just one segment for now...
     let t_n = norm_segments[0].t.to_vec();
     let f_n = norm_segments[0].f_norm.clone(); // should impl copy later
+    let sigma_n = norm_segments[0].sigma.clone();
 
 
     // period_phase = (period, corresponding phases)
@@ -314,20 +322,31 @@ fn main() -> fitsio::errors::Result<()> {
         .collect();
 
     let mut deepest_dip: f64 = f64::INFINITY;
+    let mut num_points: usize = 0;
 
     for d in trial_durations.iter() {
         let box_average = search_bins::<N_BINS>(&period_phase[0].0, d, &binned_flux);
-        let mut temp: f64 = 0.0;
         if box_average.is_some() {
-            temp = box_average.unwrap();
+            let boxed= box_average.unwrap();
             // println!("box_average = {}", temp);
-            if temp < deepest_dip {
-                deepest_dip = temp;
+            let temp_average = boxed.0;
+            if temp_average < deepest_dip {
+                deepest_dip = temp_average;
+                num_points = boxed.1;
             }
         }
     }
+    assert!(deepest_dip.is_finite(), "deepest_dip should be finite");
 
     println!("Deepest dip: {}", deepest_dip);
+
+    /* ---- Now onto Scoring through SNR ---- */
+
+    let num_points_f64: f64 = num_points as f64;
+    let period_scores: Vec<(f64, f64)> = Vec::new();
+    let snr = signal_to_noise_ratio(&deepest_dip, &num_points_f64, &sigma_n).unwrap();
+
+    println!("Snr: {}", snr);
 
     Ok(())
 }

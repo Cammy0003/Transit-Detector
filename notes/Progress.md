@@ -92,4 +92,9 @@
    had a size corresponding to a given trial duration, I pulled out the deepest dip in the data, to be 
    used for SNR.
 
+3. **Signal to Noise Ratio**
 
+   Create the SNR function. Next, I will try to implement all three things done today, such that I can 
+   apply it all for every trial period.
+
+---
