@@ -11,12 +11,14 @@ def main():
     data = json.loads(raw)
 
     x = data["x"]
+    x_label = data["x_label"]
     y = data["y"]
+    y_label = data["y_label"]
 
     plt.plot(x, y)
-    plt.xlabel("x")
-    plt.ylabel("y")
-    plt.title("Rust Vec<f64> vs Vec<f64>")
+    plt.xlabel(x_label)
+    plt.ylabel(y_label)
+    plt.title(f'{y_label} vs. {x_label}')
     plt.grid(True)
     plt.show()
 

@@ -8,6 +8,47 @@ use fitsio::tables::Column;
 use std::path::PathBuf;
 use plotters::prelude::*;
 use plotters::series::LineSeries;
+use std::io::Write;
+use std::process::{Command, Stdio};
+use serde::Serialize;
+
+fn plot_to_python(
+    x_label: &str,
+    y_label: &str,
+    dat_x: &[f64],
+    dat_y: &[f64],
+) -> std::io::Result<()> {
+    #[derive(Serialize)]
+    struct Data {
+        x_label: String,
+        y_label: String,
+        x: Vec<f64>,
+        y: Vec<f64>,
+    }
+
+    let payload = Data {
+        x_label: x_label.to_owned(),   // or x_label.to_string()
+        y_label: y_label.to_owned(),
+        x: dat_x.to_vec(),
+        y: dat_y.to_vec(),
+    };
+
+    let json = serde_json::to_string(&payload).expect("failed to serialize");
+
+    let mut child = Command::new("python3")
+        .arg("plotting_data.py")
+        .stdin(Stdio::piped())
+        .spawn()
+        .expect("failed to start python");
+
+    {
+        let stdin = child.stdin.as_mut().expect("failed to open stdin");
+        stdin.write_all(json.as_bytes()).expect("failed to write json");
+    }
+
+    Ok(())
+}
+
 
 fn load_tess_data(f: &mut FitsFile) -> fitsio::errors::Result<(Vec<f64>, Vec<f64>, Vec<i32>)> {
     let hdu = f.hdu(1)?;
@@ -97,7 +138,7 @@ fn median_absolute_deviation(arr: &[f64], med: &f64) -> Option<f64> {
 
 impl<'a> NormSegment<'a> {
     fn segment_noise_clean(&mut self, k: f64){
-        let Some(mad) = mad_segments_norm(&self.f_norm) else { return };
+        let Some(mad) = median_absolute_deviation(&self.f_norm, &self.med) else { return };
         let sigma = 1.4826 * mad;
         let threshold = k * sigma;
 
@@ -134,38 +175,71 @@ fn normalize_segments<'a>(
     return out;
 }
 
-fn binning_flux(
-    trial_period: &f64,
-    flux_segment: &[f64],
-    time_segment: &[f64],
-) -> Vec<f64> {
-    let mut phase: Vec<f64> = Vec::new();
+fn get_phases(times: &[f64], period: f64) -> Vec<f64> {
 
-    for time in time_segment.iter() {
-        phase.push( (time % trial_period) / trial_period );
+    let mut phases = Vec::new();
+
+    for t in times {
+        let phase = (t % period) / period;
+        phases.push(phase);
     }
 
-    let n_bins = 200;
-    let start = 0.0;
-    let end = 1.0;
-
-    let divided_phase: Vec<f64> = (0..=n_bins)
-        .map(|i| start + (end - start) * i as f64 / n_bins as f64)
-        .collect();
-
-    let mut count: [i32; 200] = [0; 200];
-    let mut sum_flux: [f64; 200] = [0.0; 200];
-
-    for phase in divided_phase.iter() {
-        let bin_index: usize = (phase * n_bins.as_f64()).floor() as usize;
-        sum_flux[bin_index] += flux_segment[bin_index];
-        count[bin_index] += 1;
-    }
-
-    let binned_flux: Vec<f64> = (0..=n_bins).map(|i| sum_flux[i] / count[i] as f64).collect();
-
-    return binned_flux;
+    return phases;
 }
+
+fn binning<const N_BINS: usize>(flux: &Vec<f64>, phases: &Vec<f64>) -> Vec<f64> {
+
+    let mut binned_flux: Vec<f64> = Vec::new();
+
+    let mut count: [i32; N_BINS] = [0; N_BINS];
+    let mut sum_flux: [f64; N_BINS] = [0.0; N_BINS];
+
+    for (f, p) in flux.iter().zip(phases.iter()) {
+        let bin_index = (p * N_BINS as f64).floor() as usize;
+        count[bin_index] += 1;
+        sum_flux[bin_index] += f;
+    }
+
+    for (sum, count) in sum_flux.into_iter().zip(count.into_iter()) {
+        // sum_flux and count don't need to retain ownership
+        binned_flux.push(sum / count as f64)
+    }
+
+    binned_flux
+}
+
+fn search_bins<const N_BINS: usize>(
+    trial_period: &f64,
+    trial_duration: &f64,
+    binned_flux: &Vec<f64>,
+) -> Option<f64> {
+
+    let window_width: usize = (((trial_duration / 24.0) / trial_period) * N_BINS as f64).round() as usize;
+
+    /*
+    println!("trial_duration = {}", trial_duration);
+    println!("window_width = {}", window_width);
+    println!("binned_flux.len() = {}", binned_flux.len());
+     */
+
+
+    if window_width == 0 || window_width > binned_flux.len() { return None; }
+
+    let mut sum_flux: f64 = binned_flux[..window_width].iter().sum();
+    let mut result: f64 = sum_flux / window_width as f64;
+
+    for right in window_width..binned_flux.len() {
+        sum_flux += binned_flux[right] - binned_flux[right - window_width];
+        let avg = sum_flux / window_width as f64;
+
+        if avg < result {
+            result = avg;
+        }
+    }
+
+    Some(result)
+}
+
 
 fn main() -> fitsio::errors::Result<()> {
     let fits_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -197,13 +271,65 @@ fn main() -> fitsio::errors::Result<()> {
         seg.segment_noise_clean(6.0);
     }
 
-    let trial_periods: Vec<f64> = (1..=40)
+    let trial_periods: Vec<f64> = (1..=4000)
+        .map(|i| i as f64 * 0.5)
+        .collect();
+    // println!("{:#?}", trial_periods);
+
+
+    // start with just one segment for now...
+    let t_n = norm_segments[0].t.to_vec();
+    let f_n = norm_segments[0].f_norm.clone(); // should impl copy later
+
+
+    // period_phase = (period, corresponding phases)
+    let mut period_phase: Vec<(f64, Vec<f64>)> = Vec::new();
+    for &period in trial_periods.iter() {
+        let phases = get_phases(&t_n, period);
+        period_phase.push((period, phases));
+    }
+
+
+
+    /*
+    println!("Plotting flux vs time");
+    plot_to_python("time".into(), "flux".into(), &t_n, &f_n)?;
+    println!("Plotting flux vs phase");
+    plot_to_python("phase".into(), "flux".into(), &period_phase[0].1, &f_n)?;
+    println!("Done both plots");
+     */
+
+    const N_BINS: usize = 200;
+    let binned_flux: Vec<f64> = binning::<N_BINS>(&f_n, &period_phase[0].1);
+    assert_eq!(binned_flux.len(), N_BINS);
+
+
+    println!("Plotting binned_flux");
+    let binned_range: Vec<f64> = (0..N_BINS).map(|i| i as f64).collect();
+    plot_to_python("Bins".into(), "Binned Flux".into(), &binned_range, &binned_flux);
+
+
+    let trial_durations: Vec<f64> = (1..20)
         .map(|i| i as f64 * 0.5)
         .collect();
 
+    let mut deepest_dip: f64 = f64::INFINITY;
 
+    for d in trial_durations.iter() {
+        let box_average = search_bins::<N_BINS>(&period_phase[0].0, d, &binned_flux);
+        let mut temp: f64 = 0.0;
+        if box_average.is_some() {
+            temp = box_average.unwrap();
+            // println!("box_average = {}", temp);
+            if temp < deepest_dip {
+                deepest_dip = temp;
+            }
+        }
+    }
 
-
+    println!("Deepest dip: {}", deepest_dip);
 
     Ok(())
 }
+
+
