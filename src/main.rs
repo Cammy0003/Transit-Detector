@@ -181,7 +181,7 @@ fn normalize_segments(f: &[f64], segments: &[(usize, usize)]) -> Vec<NormSegment
     out
 }
 
-fn get_phases(times: &[f64], period: f64) -> Vec<f64> {
+fn get_phases(times: &[f64], period: &f64) -> Vec<f64> {
 
     let mut phases = Vec::new();
 
@@ -215,7 +215,7 @@ fn binning<const N_BINS: usize>(flux: &Vec<f64>, phases: &Vec<f64>) -> Vec<f64> 
 }
 
 fn search_bins<const N_BINS: usize>(
-    trial_period: &f64, trial_duration: &f64, binned_flux: &Vec<f64>) -> Option<(f64, usize)> {
+    trial_period: &f64, trial_duration: &f64, binned_flux: &Vec<f64>) -> Option<(f64, usize, f64)> {
 
     let window_width: usize = (((trial_duration / 24.0) / trial_period) * N_BINS as f64).round() as usize;
 
@@ -227,6 +227,7 @@ fn search_bins<const N_BINS: usize>(
 
     if window_width == 0 || window_width > binned_flux.len() { return None; }
 
+    let mut centre_phase_numerator: f64 = 0.0;
     let mut sum_flux: f64 = binned_flux[..window_width].iter().sum();
     let mut result: f64 = sum_flux / window_width as f64;
 
@@ -236,14 +237,17 @@ fn search_bins<const N_BINS: usize>(
 
         if avg < result {
             result = avg;
+            centre_phase_numerator = (2.0 * right as f64 - window_width as f64) / 2.0;
         }
     }
+    let centre_phase = centre_phase_numerator / N_BINS as f64;
 
-    Some((result, window_width))
+
+    Some((result, window_width, centre_phase))
 }
 
 fn signal_to_noise_ratio(
-    deepest_dip: &f64, num_points: &f64, sigma: &f64) -> Option<f64> {
+    deepest_dip: f64, num_points: f64, sigma: &f64) -> Option<f64> {
     let snr = (- deepest_dip / sigma ) * num_points.sqrt();
     Some(snr)
 }
@@ -280,7 +284,7 @@ fn main() -> fitsio::errors::Result<()> {
     }
 
     // stitch the segments back together
-    let mut f_all: Vec<f64> = norm_segments
+    let f_all: Vec<f64> = norm_segments
         .iter()
         .flat_map(|seg| seg.f_norm.iter().copied())
         .collect();
@@ -292,15 +296,24 @@ fn main() -> fitsio::errors::Result<()> {
         .expect("median cadence of f_all not found");
     let sigma_all = 1.4628 * mad_all;
 
-    let trial_periods: Vec<f64> = (1..=4000)
+    let trial_periods: Vec<f64> = (1..=250)
         .map(|i| i as f64 * 0.5)
         .collect();
     // println!("{:#?}", trial_periods);
 
     // goal is to get a (period, SNR)
+    struct Candidate {
+        period: f64,
+        snr: f64,
+        duration: f64,
+        phase: f64,
+    }
+
+    println!("Testing Periods");
+    let mut candidates: Vec<Candidate> = Vec::new();
     const N_BINS: usize = 200;
     for period in trial_periods.iter() {
-        let phase: Vec<f64> = get_phases(&t_all, *period);
+        let phase: Vec<f64> = get_phases(&t_all, period);
         let binned_flux: Vec<f64> = binning::<N_BINS>(&f_all, &phase);
         assert_eq!(binned_flux.len(), N_BINS);
 
@@ -310,9 +323,10 @@ fn main() -> fitsio::errors::Result<()> {
         let mut deepest_dip: f64 = f64::INFINITY;
         let mut window_length: usize = 0;
         let mut duration: f64 = 0.0;
+        let mut centre_phase: f64 = 0.0;
 
         for d in trial_durations.iter() {
-            let boxed = search_bins::<N_BINS>(&period, d, &binned_flux);
+            let boxed = search_bins::<N_BINS>(period, d, &binned_flux);
             if boxed.is_some() {
                 let boxed = boxed.unwrap();
                 let box_average = boxed.0;
@@ -320,16 +334,33 @@ fn main() -> fitsio::errors::Result<()> {
                     deepest_dip = box_average;
                     window_length = boxed.1;
                     duration = *d;
+                    centre_phase = boxed.2;
                 }
-            } else{
-                println!("Invalid Window Length has been found, continuing");
             }
         }
-        assert!(deepest_dip.is_finite(), "deepest_dip should be finite");
+        if !deepest_dip.is_finite() {
+            deepest_dip = 0.0;
+        }
 
-        println!("Found deepest dip. Now onto scoring with SNR...");
-
+        // println!("Found deepest dip. Now onto scoring with SNR...");
+        let window_length: f64 = window_length as f64;
+        let snr = signal_to_noise_ratio(deepest_dip, window_length, &sigma_all)
+            .expect("SNR failure");
+        let potential: Candidate = Candidate {
+            period: *period,
+            snr,
+            duration,
+            phase: centre_phase,
+        };
+        candidates.push(potential);
     }
+
+    println!("Plotting Potential candidates: SNR vs. Period");
+    let candidate_periods: Vec<f64> = candidates.iter().map(|c| c.period).collect();
+    let candidate_snr: Vec<f64> = candidates.iter().map(|c| c.snr).collect();
+    plot_to_python("Period".into(), "SNR".into(), &candidate_periods, &candidate_snr);
+
+
 
     Ok(())
 }
