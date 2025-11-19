@@ -1,7 +1,3 @@
-This is a fantastic project for a software engineering resume. It shows you can handle real-world scientific data, implement a core algorithm from scratch, and manage a data pipeline.
-
-Let's break down this recipe step-by-step in plain English.
-
 ### The Big Picture: What Are We Doing?
 
 Our goal is to find a "transit"—a tiny, repeating dip in a star's brightness caused by a planet passing in front of it.
@@ -97,6 +93,7 @@ This part is easy. You look at your Periodogram (the "SNR vs. Period" chart) and
 ---
 
 ### 4. Sanity Checks (Is it an Impostor?)
+**This is to be done for `V2.0` of the project...**
 
 Not all dips are planets. The most common "impostor" is an **Eclipsing Binary (EB)**—two stars orbiting each other. This is how you check for them:
 
@@ -107,19 +104,3 @@ Not all dips are planets. The most common "impostor" is an **Eclipsing Binary (E
 * **Secondary Eclipse Check:** You look at the "phase-folded" data exactly *opposite* your main dip (at phase 0.5).
     * If you see *another*, shallower dip there, it's the "secondary eclipse" (the smaller star going *behind* the bigger one).
     * Planets are tiny and dark; they don't cause a secondary eclipse you can see. This is a dead giveaway for an EB.
-
----
-
-### 5. Final Outputs (For the Resume)
-
-You're done! Your program should output:
-
-1.  **A CSV file:** A simple one-line text file summarizing your result:
-    `Star_ID, Best_Period, Best_Duration, Depth, SNR, EB_Flag`
-2.  **Two Plots:**
-    * **The Periodogram:** The chart of `SNR` vs. `Period`, showing the huge spike at your winning period.
-    * **The Folded Light Curve:** The "stacked" data plot that clearly shows all the data points lining up to form the beautiful transit dip.
-
-This is a perfect resume project because it's self-contained, demonstrates a key algorithm (BLS), shows you can handle real data, and uses smart optimizations (prefix sums).
-
-Would you like me to explain the "prefix sum" trick in more detail? It's a really neat bit of computer science.

@@ -98,3 +98,37 @@
    apply it all for every trial period.
 
 ---
+
+## Nov-18-2025 (Complete V1.0)
+
+1. **Iterated over Trial Periods**
+   Created 4000 trial periods, that considered `period + 0.5` days. These trial periods are to be iterated
+   over, binned, searched, and have their SNR values computed. 
+
+
+2. **Binned Entire Flux Data**
+   Upon cleaning, normalizing and centering the flux segments, I stitched the segments together, and binned them 
+   correctly.
+
+
+3. **Searched Bins**
+   Through a sliding window over bins, pulled out the deepest dip, associated window_width, phase of such, and count
+   of flux values within that window. All of these are required for the SNR calculation.
+
+
+4. **Calculated SNR**
+   Computed the SNR using the data achieved from searching over the binned data. I pushed that into an array that 
+   kept track of `(period, snr)` basically. I implemented a candidate struct to make that process of tracking such
+   easier. 
+
+
+5. **Found the best period**
+   Iterated over all `(period, snr)` data. The one that had the greatest `snr`, implied the most likely transit.
+
+
+6. **Completed first draft**
+   With all that, I have officially completed the project. Albeit there is a ton of cleanup and organizing of code 
+   needed to be done, but the sole goal of finding a transit has been met.
+   
+
+---
