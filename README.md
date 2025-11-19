@@ -26,7 +26,7 @@ that I intend to follow with this project.
 ---
 
 ## Current Progress
-Status: **Completed `V1.0` on Nov-18-2025**
+Status: **Completed `v1.0` on Nov-18-2025**
 
 Refer to `notes/Progress.md` for the progress made on the project.
 
@@ -46,3 +46,5 @@ Chat GPT and Gemini helped with a bunch of things, as usual. Praise be to the AI
 1. `v1.0` completed Nov-18-2025:
    Although technically completed for the baseline goal, the code still needs to be seriously organized and tested 
    in depth, before it can be used seriously. The plan is to do such for `v2.0`.
+
+---
