@@ -58,7 +58,8 @@ fn load_tess_data(f: &mut FitsFile) -> fitsio::errors::Result<(Vec<f64>, Vec<f64
     Ok((time, flux, qual))
 }
 
-fn filter_and_sort_tess_data(flux: Vec<f64>, time: Vec<f64>, qual: Vec<i32>) -> fitsio::errors::Result<(Vec<f64>, Vec<f64>)> {
+fn filter_and_sort_tess_data(
+    flux: Vec<f64>, time: Vec<f64>, qual: Vec<i32>) -> fitsio::errors::Result<(Vec<f64>, Vec<f64>)> {
     let good_indices: Vec<usize> = (0..time.len())
         .filter(|&i| qual[i] == 0 && time[i].is_finite() && flux[i].is_finite())
         .collect();
@@ -75,16 +76,27 @@ fn filter_and_sort_tess_data(flux: Vec<f64>, time: Vec<f64>, qual: Vec<i32>) -> 
     Ok((t_sorted, f_sorted))
 }
 
-fn median(v: &mut Vec<f64>) -> Option<f64> {
-    if v.is_empty() { return None; }
+pub fn median(data: &[f64]) -> Option<f64> {
+    if data.is_empty() {
+        return None;
+    }
+    // Filter out NaNs so they don't break ordering
+    let mut v: Vec<f64> = data.iter().copied().filter(|x| x.is_finite()).collect();
+    if v.is_empty() {
+        return None;
+    }
     v.sort_by(|a, b| a.partial_cmp(b).unwrap());
     let mid = v.len() / 2;
+
     if v.len() % 2 == 0 {
-        Some((v[mid - 1] + v[mid]) / 2.0)
+        // even length → average of the two middle values
+        Some((v[mid - 1] + v[mid]) * 0.5)
     } else {
+        // odd length → middle value
         Some(v[mid])
     }
 }
+
 fn median_cadence(times: &[f64]) -> Option<f64> {
     if times.len() < 2 { return None; }
     let mut dts: Vec<f64> = times
@@ -111,15 +123,24 @@ fn segment_on_gaps(t: &[f64], dt_med: f64, gap_factor: f64) -> Vec<(usize, usize
     }
 
     segment_bounds.push((start, t.len()));
-    return segment_bounds;
+    segment_bounds
 }
 
-struct NormSegment<'a> {
-    t: &'a [f64],
-    f_raw: &'a [f64],
+struct NormSegment {
     f_norm: Vec<f64>,
     med: f64,
     sigma: f64,
+}
+impl NormSegment {
+    fn segment_noise_clean(&mut self, k: f64){
+        let threshold = k * self.sigma;
+
+        for f in self.f_norm.iter_mut() {
+            if !f.is_finite() || f.abs() > threshold {
+                *f = f64::NAN;
+            }
+        }
+    }
 }
 
 fn median_absolute_deviation(arr: &[f64], med: &f64) -> Option<f64> {
@@ -137,44 +158,27 @@ fn median_absolute_deviation(arr: &[f64], med: &f64) -> Option<f64> {
     median(&mut deviations)
 }
 
-impl<'a> NormSegment<'a> {
-    fn segment_noise_clean(&mut self, k: f64){
-        let Some(mad) = median_absolute_deviation(&self.f_norm, &self.med) else { return };
-        self.sigma = 1.4826 * mad;
-        let threshold = k * self.sigma;
 
-        for f in self.f_norm.iter_mut() {
-            if !f.is_finite() || f.abs() > threshold {
-                *f = f64::NAN;
-            }
-        }
-    }
-}
-
-fn normalize_segments<'a>(
-    t: &'a [f64],
-    f: &'a [f64],
-    segments: &[(usize, usize)]
-) -> Vec<NormSegment<'a>> {
+fn normalize_segments(f: &[f64], segments: &[(usize, usize)]) -> Vec<NormSegment> {
     let mut out = Vec::with_capacity(segments.len());
 
     for &(s, e) in segments {
-        let f_seg = &f[s..e]; // check later if you need to have f[s..e+1]
+        let f_seg = &f[s..e]; // e is exclusive
         let mut temp: Vec<f64> = f_seg.iter().copied().collect();
         let med = median(&mut temp).expect("empty segment");
         assert!(med.is_finite() && med != 0.0, "segment median zero or infinite; normalization blow up");
         let inv = 1.0 / med;
         let f_norm: Vec<f64> = f_seg.iter().map(|&f| inv * f - 1.0).collect();
+        let mad = median_absolute_deviation(&f_norm, &med).expect("couldn't find MAD");
+        let sigma = 1.4826 * mad;
 
         out.push(NormSegment {
-            t: &t[s..e],
-            f_raw: f_seg,
             f_norm,
             med,
-            sigma: 0.0,
+            sigma,
         });
     }
-    return out;
+    out
 }
 
 fn get_phases(times: &[f64], period: f64) -> Vec<f64> {
@@ -186,7 +190,7 @@ fn get_phases(times: &[f64], period: f64) -> Vec<f64> {
         phases.push(phase);
     }
 
-    return phases;
+    phases
 }
 
 fn binning<const N_BINS: usize>(flux: &Vec<f64>, phases: &Vec<f64>) -> Vec<f64> {
@@ -211,10 +215,7 @@ fn binning<const N_BINS: usize>(flux: &Vec<f64>, phases: &Vec<f64>) -> Vec<f64> 
 }
 
 fn search_bins<const N_BINS: usize>(
-    trial_period: &f64,
-    trial_duration: &f64,
-    binned_flux: &Vec<f64>,
-) -> Option<(f64, usize)> {
+    trial_period: &f64, trial_duration: &f64, binned_flux: &Vec<f64>) -> Option<(f64, usize)> {
 
     let window_width: usize = (((trial_duration / 24.0) / trial_period) * N_BINS as f64).round() as usize;
 
@@ -223,7 +224,6 @@ fn search_bins<const N_BINS: usize>(
     println!("window_width = {}", window_width);
     println!("binned_flux.len() = {}", binned_flux.len());
      */
-
 
     if window_width == 0 || window_width > binned_flux.len() { return None; }
 
@@ -271,29 +271,81 @@ fn main() -> fitsio::errors::Result<()> {
     let gap_factor = 5.0;
     let seg_bounds = segment_on_gaps(&t, dt_med, gap_factor); // dt_med loses ownership
 
-    let mut norm_segments: Vec<NormSegment> = normalize_segments(&t, &f, &seg_bounds);
+    let mut norm_segments: Vec<NormSegment> = normalize_segments(&f, &seg_bounds);
 
     // cleaning all segments
+    const K: f64 = 6.0;
     for seg in norm_segments.iter_mut() {
-        seg.segment_noise_clean(6.0);
+        seg.segment_noise_clean(K);
     }
+
+    // stitch the segments back together
+    let mut f_all: Vec<f64> = norm_segments
+        .iter()
+        .flat_map(|seg| seg.f_norm.iter().copied())
+        .collect();
+
+    let t_all = t; // for clarity
+
+    let median_all = median(&f_all).expect("median cadence of f_all not found");
+    let mad_all = median_absolute_deviation(&f_all, &median_all)
+        .expect("median cadence of f_all not found");
+    let sigma_all = 1.4628 * mad_all;
 
     let trial_periods: Vec<f64> = (1..=4000)
         .map(|i| i as f64 * 0.5)
         .collect();
     // println!("{:#?}", trial_periods);
 
+    // goal is to get a (period, SNR)
+    const N_BINS: usize = 200;
+    for period in trial_periods.iter() {
+        let phase: Vec<f64> = get_phases(&t_all, *period);
+        let binned_flux: Vec<f64> = binning::<N_BINS>(&f_all, &phase);
+        assert_eq!(binned_flux.len(), N_BINS);
+
+        let trial_durations: Vec<f64> = (0..20)
+            .map(|i| i as f64 * 0.5)
+            .collect();
+        let mut deepest_dip: f64 = f64::INFINITY;
+        let mut window_length: usize = 0;
+        let mut duration: f64 = 0.0;
+
+        for d in trial_durations.iter() {
+            let boxed = search_bins::<N_BINS>(&period, d, &binned_flux);
+            if boxed.is_some() {
+                let boxed = boxed.unwrap();
+                let box_average = boxed.0;
+                if box_average < deepest_dip {
+                    deepest_dip = box_average;
+                    window_length = boxed.1;
+                    duration = *d;
+                }
+            } else{
+                println!("Invalid Window Length has been found, continuing");
+            }
+        }
+        assert!(deepest_dip.is_finite(), "deepest_dip should be finite");
+
+        println!("Found deepest dip. Now onto scoring with SNR...");
+
+    }
+
+    Ok(())
+}
+
+    /*
+
+
 
     // start with just one segment for now...
-    let t_n = norm_segments[0].t.to_vec();
-    let f_n = norm_segments[0].f_norm.clone(); // should impl copy later
     let sigma_n = norm_segments[0].sigma.clone();
 
 
     // period_phase = (period, corresponding phases)
     let mut period_phase: Vec<(f64, Vec<f64>)> = Vec::new();
     for &period in trial_periods.iter() {
-        let phases = get_phases(&t_n, period);
+        let phases = get_phases(&t_all, period);
         period_phase.push((period, phases));
     }
 
@@ -308,7 +360,7 @@ fn main() -> fitsio::errors::Result<()> {
      */
 
     const N_BINS: usize = 200;
-    let binned_flux: Vec<f64> = binning::<N_BINS>(&f_n, &period_phase[0].1);
+    let binned_flux: Vec<f64> = binning::<N_BINS>(&f_all, &period_phase[0].1);
     assert_eq!(binned_flux.len(), N_BINS);
 
 
@@ -325,13 +377,13 @@ fn main() -> fitsio::errors::Result<()> {
     let mut num_points: usize = 0;
 
     for d in trial_durations.iter() {
-        let box_average = search_bins::<N_BINS>(&period_phase[0].0, d, &binned_flux);
-        if box_average.is_some() {
-            let boxed= box_average.unwrap();
+        let boxed = search_bins::<N_BINS>(&period_phase[0].0, d, &binned_flux);
+        if boxed.is_some() {
+            let boxed= boxed.unwrap();
             // println!("box_average = {}", temp);
-            let temp_average = boxed.0;
-            if temp_average < deepest_dip {
-                deepest_dip = temp_average;
+            let box_average = boxed.0;
+            if box_average < deepest_dip {
+                deepest_dip = box_average;
                 num_points = boxed.1;
             }
         }
@@ -348,7 +400,5 @@ fn main() -> fitsio::errors::Result<()> {
 
     println!("Snr: {}", snr);
 
-    Ok(())
-}
-
+     */
 
