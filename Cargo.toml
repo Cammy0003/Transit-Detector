@@ -5,6 +5,5 @@ edition = "2024"
 
 [dependencies]
 fitsio = "0.21.7"
-plotters = { version = "0.3", features = ["line_series", "bitmap_encoder"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

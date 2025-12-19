@@ -18,7 +18,13 @@ but it is expected that the program will at least detect more obvious transits.
 
 ---
 
-## Followed Procedure
+## How to Run:
+
+
+
+---
+
+## Development Procedure
 
 Refer to `notes/Plan.md` (by Chat GPT) and `notes/PlanExplanation.md` (by Gemini), for the general recipe 
 that I intend to follow with this project. 
