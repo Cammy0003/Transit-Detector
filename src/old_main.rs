@@ -212,7 +212,8 @@ fn binning<const N_BINS: usize>(flux: &[f64], phases: &[f64]) -> (Vec<f64>, [u32
 
 fn search_bins<const N_BINS: usize>(
     trial_period: &f64, trial_duration: &f64,
-    binned_flux: &Vec<f64>, counts: &[u32; N_BINS]) -> Option<(f64, usize, f64, u32)> {
+    binned_flux: &Vec<f64>, counts: &[u32; N_BINS])
+    -> Option<(f64, usize, f64, u32)> {
 
     let window_width: usize = (((trial_duration / 24.0) / trial_period) * N_BINS as f64).round() as usize;
 

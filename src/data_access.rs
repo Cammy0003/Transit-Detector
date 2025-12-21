@@ -1,21 +1,20 @@
 pub mod fits_access;
-mod data_cleaner;
+pub mod data_cleaner;
 
-struct CleanLightCurve {
+use fitsio::FitsFile;
+
+struct CleanLightCurves {
     time: Vec<f64>,
     flux: Vec<f64>,
-    qual: Vec<i32>
+    sigma: f64
 }
 
-impl CleanLightCurve {
-    pub fn new(time: Vec<f64>, flux: Vec<f64>, qual: Vec<i32>) -> CleanLightCurve {
-        CleanLightCurve {
+impl CleanLightCurves {
+    pub fn new(time: Vec<f64>, flux: Vec<f64>, sigma: f64) -> CleanLightCurves {
+        CleanLightCurves {
             time,
             flux,
-            qual
+            sigma
         }
     }
-
-
-
 }
