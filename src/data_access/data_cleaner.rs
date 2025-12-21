@@ -1,6 +1,6 @@
 use crate::statistical_methods::statistics::{median, median_absolute_deviation, median_cadence};
 
-pub struct NormSegment {
+struct NormSegment {
     f_norm: Vec<f64>,
     med: f64,
     sigma: f64,
@@ -17,16 +17,32 @@ impl NormSegment {
     }
 }
 
-pub fn normalize_segments(f: &[f64], segments: &[(usize, usize)]) -> Vec<NormSegment> {
+#[derive(Debug)]
+pub enum CleanDataError {
+    EmptyTimes,
+    MedianCadenceFailed,
+    EmptySegment { start: usize, end: usize },
+    BadSegmentMedian { start: usize, end: usize, med: f64 },
+    MadFailedSegment { start: usize, end: usize },
+    MadFailedAll,
+}
+
+fn normalize_segments(f: &[f64], segments: &[(usize, usize)]) -> Result<Vec<NormSegment>, CleanDataError> {
     let mut out = Vec::with_capacity(segments.len());
 
     for &(s, e) in segments {
+        if s >= e {
+            return Err(CleanDataError::EmptySegment { start: s, end: e });
+        }
         let f_seg = &f[s..e]; // e is exclusive
-        let med = median(&f_seg).expect("empty segment");
-        assert!(med.is_finite() && med != 0.0, "segment median zero or infinite; normalization blow up");
+        let med = median(&f_seg).ok_or(CleanDataError::EmptySegment { start: s, end: e })?;
+        if !med.is_finite() || med == 0.0 {
+            return Err(CleanDataError::BadSegmentMedian { start: s, end: e, med });
+        }
         let inv = 1.0 / med;
         let f_norm: Vec<f64> = f_seg.iter().map(|&f| inv * f - 1.0).collect();
-        let mad = median_absolute_deviation(&f_norm).expect("couldn't find MAD");
+        let mad = median_absolute_deviation(&f_norm)
+            .ok_or(CleanDataError::MadFailedSegment { start: s, end: e })?;
         let sigma = 1.4826 * mad;
 
         out.push(NormSegment {
@@ -35,7 +51,7 @@ pub fn normalize_segments(f: &[f64], segments: &[(usize, usize)]) -> Vec<NormSeg
             sigma,
         });
     }
-    out
+    Ok(out)
 }
 
 fn segment_on_gaps(t: &[f64], dt_med: f64, gap_factor: f64) -> Vec<(usize, usize)> {
@@ -56,12 +72,14 @@ fn segment_on_gaps(t: &[f64], dt_med: f64, gap_factor: f64) -> Vec<(usize, usize
     segment_bounds
 }
 
-pub fn clean_data(flux: Vec<f64>, times: &Vec<f64>, k: f64) -> Vec<f64> {
-    let dt_med = median_cadence(&times).expect("median cadence not found");
+pub fn clean_data(flux: Vec<f64>, times: &Vec<f64>, k: f64) -> Result<(Vec<f64>, f64), CleanDataError> {
+    if times.is_empty() { return Err(CleanDataError::EmptyTimes) }
+
+    let dt_med = median_cadence(&times).ok_or(CleanDataError::MedianCadenceFailed)?;
     let gap_factor = 5.0;
     let seg_bounds = segment_on_gaps(&times, dt_med, gap_factor); // dt_med loses ownership
 
-    let mut norm_segments: Vec<NormSegment> = normalize_segments(&flux, &seg_bounds);
+    let mut norm_segments: Vec<NormSegment> = normalize_segments(&flux, &seg_bounds)?;
     for seg in norm_segments.iter_mut() {
         seg.segment_noise_clean(k);
     }
@@ -70,5 +88,7 @@ pub fn clean_data(flux: Vec<f64>, times: &Vec<f64>, k: f64) -> Vec<f64> {
         .flat_map(|seg| seg.f_norm.iter().copied())
         .collect();
 
-    f_all
+    let mad_all = median_absolute_deviation(&f_all).ok_or(CleanDataError::MadFailedAll)?;
+    let sigma = 1.4826 * mad_all;
+    Ok((f_all, sigma))
 }

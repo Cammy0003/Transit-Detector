@@ -3,7 +3,7 @@ pub mod data_cleaner;
 
 use fitsio::FitsFile;
 
-struct CleanLightCurves {
+pub struct CleanLightCurves {
     time: Vec<f64>,
     flux: Vec<f64>,
     sigma: f64
