@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use crate::data_access::{CleanLightCurve};
 
 #[derive(Copy, Clone, Default)]
 struct Candidate {
@@ -8,7 +9,14 @@ struct Candidate {
     phase: f64,
 }
 
+impl Candidate {
+    fn new(period: f64, snr: f64, duration: f64, phase: f64) -> Candidate {
+        Candidate { period, snr, duration, phase }
+    }
+}
+
 impl Display for Candidate {
+
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
             f,
@@ -18,18 +26,37 @@ impl Display for Candidate {
     }
 }
 
-fn signal_to_noise_ratio(
-    deepest_dip: f64, num_points: f64, sigma: &f64) -> Option<f64> {
-    let snr = (- deepest_dip / sigma ) * num_points.sqrt();
+fn signal_to_noise_ratio(deepest_dip: f64, num_points: usize, sigma: f64) -> Option<f64> {
+    let snr = (- deepest_dip / sigma ) * (num_points as f64).sqrt();
     Some(snr)
 }
 
-fn search_bins<const N_BINS: usize>(
-    trial_period: &f64, trial_duration: &f64,
-    binned_flux: &Vec<f64>, counts: &[u32; N_BINS])
-    -> Option<(f64, usize, f64, u32)> {
+fn binning(flux: &Vec<f64>, phases: &[f64], n_bins: usize) -> (Vec<f64>, Vec<u32>) {
+    let mut count: Vec<u32> = Vec::with_capacity(n_bins);
+    let mut sum_flux: Vec<f64> = Vec::with_capacity(n_bins);
 
-    let window_width: usize = (((trial_duration / 24.0) / trial_period) * N_BINS as f64).round() as usize;
+    for (flux, phase) in flux.iter().zip(phases.iter()) {
+        let bin_index = (phase * n_bins as f64).floor() as usize;
+        count[bin_index] += 1;
+        sum_flux[bin_index] += flux;
+    }
+
+    let mut binned_flux = Vec::with_capacity(n_bins);
+    for i in 0..n_bins {
+        if count[i] == 0 {
+            binned_flux.push(0.0); // or some neutral value
+        } else {
+            binned_flux.push(sum_flux[i] / count[i] as f64);
+        }
+    }
+    (binned_flux, count)
+}
+
+fn search_bins
+(trial_period: f64, trial_duration: f64, binned_flux: &Vec<f64>, counts: &Vec<u32>,  n_bins: usize,)
+    -> Option<(f64, usize, f64)> {
+
+    let window_width: usize = (((trial_duration / 24.0) / trial_period) * n_bins as f64).round() as usize;
 
     if window_width == 0 || window_width > binned_flux.len() { return None; }
 
@@ -57,14 +84,8 @@ fn search_bins<const N_BINS: usize>(
             centre_phase_numerator = (2.0 * right as f64 - window_width as f64) / 2.0;
         }
     }
-    let centre_phase = centre_phase_numerator / N_BINS as f64; // used for SNR later
-    Some((deepest_dip, window_width, centre_phase, best_count))
-}
-
-fn signal_to_noise_ratio(
-    deepest_dip: f64, num_points: f64, sigma: &f64) -> Option<f64> {
-    let snr = (- deepest_dip / sigma ) * num_points.sqrt();
-    Some(snr)
+    let centre_phase = centre_phase_numerator / n_bins as f64; // used for SNR later
+    Some((deepest_dip, window_width, centre_phase))
 }
 
 fn find_max_candidate(c_snr: Vec<f64>, c_period: Vec<f64>) -> (f64, f64) {
@@ -79,7 +100,7 @@ fn find_max_candidate(c_snr: Vec<f64>, c_period: Vec<f64>) -> (f64, f64) {
     (max_snr, c_period[max_index])
 }
 
-fn get_phases(times: &[f64], period: &f64) -> Vec<f64> {
+fn get_phases(times: &Vec<f64>, period: f64) -> Vec<f64> {
 
     let mut phases = Vec::new();
 
@@ -91,12 +112,53 @@ fn get_phases(times: &[f64], period: &f64) -> Vec<f64> {
     phases
 }
 
-fn signal_to_noise_ratio(deepest_dip: f64, num_points: f64, sigma: &f64) -> Option<f64> {
-    let snr = (- deepest_dip / sigma ) * num_points.sqrt();
-    Some(snr)
-}
+pub fn find_candidates
+(lc: CleanLightCurve, trial_periods: &Vec<f64>, n_bins: usize, n_dur: usize) -> Vec<Candidate> {
+    let mut candidates: Vec<Candidate> = Vec::new();
 
-pub fn find_candidates<const N_BINS: usize> (f_all: &Vec<f64>, t_all: &Vec<f64>) -> Vec<Candidate> {
+    for &period in trial_periods.iter() {
+        let phases: Vec<f64> = get_phases(lc.time(), period);
+        let mut binned_flux: Vec<f64> = Vec::with_capacity(n_bins);
+        let mut counts: Vec<u32> = Vec::with_capacity(n_bins);
+        (binned_flux, counts) = binning(lc.flux(), &phases, n_bins);
+        let trial_durations: Vec<f64> = (0..n_dur as i32)
+            .map(|i| i as f64 * 0.5)
+            .collect();
+        let mut deepest_dip: f64 = f64::INFINITY;
+        let mut window_length: usize = 0;
+        let mut duration: f64 = 0.0;
+        let mut centre_phase: f64 = 0.0;
+
+        for &dur in trial_durations.iter() {
+            if let Some((box_avg, window_len, cent_phase))
+                = search_bins(period, dur, &binned_flux, &counts, n_bins)
+            {
+                if box_avg < deepest_dip {
+                    deepest_dip = box_avg;
+                    window_length = window_len;
+                    duration = dur;
+                    centre_phase = cent_phase;
+                }
+            }
+        }
+
+        if !deepest_dip.is_finite() {
+            deepest_dip = 0.0;
+        }
+
+        let snr = signal_to_noise_ratio(deepest_dip, window_length, lc.sigma())
+            .expect("signal_to_noise_ratio failed");
+
+        candidates.push(Candidate::new(period, snr, duration, centre_phase));
+    }
+
+    candidates
+}
+/*
+Temporary find_candidates! I plan to design a better one soon.
+
+pub fn find_candidates<const N_BINS: usize>
+(f_all: &Vec<f64>, t_all: &Vec<f64>, trial_periods: &Vec<f64>, sigma_all: f64) -> Vec<Candidate> {
     let mut candidates: Vec<Candidate> = Vec::new();
     const N_BINS: usize = 200;
     for period in trial_periods.iter() {
@@ -145,3 +207,6 @@ pub fn find_candidates<const N_BINS: usize> (f_all: &Vec<f64>, t_all: &Vec<f64>)
     }
     candidates
 }
+
+ */
+

@@ -1,7 +1,10 @@
 pub mod data_access;
 pub mod statistical_methods;
+pub mod candidacy;
 
-use data_access::{CleanLightCurves, fits_access, data_cleaner};
+use data_access::{CleanLightCurve, fits_access, data_cleaner};
+
+
 
 fn main() {
     println!("in main.rs");
@@ -11,6 +14,6 @@ fn main() {
     const K: f64 = 6.0;
     let (f_clean, sigma) = data_cleaner::clean_data(f, &t, K).expect("Error cleaning data");
 
-    let light_curve: CleanLightCurves = CleanLightCurves::new(t, f_clean, sigma);
+    let light_curve: CleanLightCurve = CleanLightCurve::new(t, f_clean, sigma);
 
 }
