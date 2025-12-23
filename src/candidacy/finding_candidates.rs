@@ -2,7 +2,7 @@ use std::fmt::Display;
 use crate::data_access::{CleanLightCurve};
 
 #[derive(Copy, Clone, Default)]
-struct Candidate {
+pub struct Candidate {
     period: f64,
     snr: f64,
     duration: f64,
@@ -12,6 +12,22 @@ struct Candidate {
 impl Candidate {
     fn new(period: f64, snr: f64, duration: f64, phase: f64) -> Candidate {
         Candidate { period, snr, duration, phase }
+    }
+
+    fn snr(&self) -> f64 {
+        self.snr
+    }
+
+    fn duration(&self) -> f64 {
+        self.duration
+    }
+
+    fn phase(&self) -> f64 {
+        self.phase
+    }
+
+    fn period(&self) -> f64 {
+        self.period
     }
 }
 
@@ -32,8 +48,8 @@ fn signal_to_noise_ratio(deepest_dip: f64, num_points: usize, sigma: f64) -> Opt
 }
 
 fn binning(flux: &Vec<f64>, phases: &[f64], n_bins: usize) -> (Vec<f64>, Vec<u32>) {
-    let mut count: Vec<u32> = Vec::with_capacity(n_bins);
-    let mut sum_flux: Vec<f64> = Vec::with_capacity(n_bins);
+    let mut count: Vec<u32> = vec![0u32; n_bins];
+    let mut sum_flux: Vec<f64> = vec![0.0; n_bins];
 
     for (flux, phase) in flux.iter().zip(phases.iter()) {
         let bin_index = (phase * n_bins as f64).floor() as usize;
@@ -41,7 +57,7 @@ fn binning(flux: &Vec<f64>, phases: &[f64], n_bins: usize) -> (Vec<f64>, Vec<u32
         sum_flux[bin_index] += flux;
     }
 
-    let mut binned_flux = Vec::with_capacity(n_bins);
+    let mut binned_flux: Vec<f64> = Vec::with_capacity(n_bins);
     for i in 0..n_bins {
         if count[i] == 0 {
             binned_flux.push(0.0); // or some neutral value
@@ -88,18 +104,6 @@ fn search_bins
     Some((deepest_dip, window_width, centre_phase))
 }
 
-fn find_max_candidate(c_snr: Vec<f64>, c_period: Vec<f64>) -> (f64, f64) {
-    let mut max_snr = f64::NEG_INFINITY;
-    let mut max_index: usize = 0;
-    for (index, snr) in c_snr.iter().enumerate() {
-        if *snr > max_snr {
-            max_snr = *snr;
-            max_index = index;
-        }
-    }
-    (max_snr, c_period[max_index])
-}
-
 fn get_phases(times: &Vec<f64>, period: f64) -> Vec<f64> {
 
     let mut phases = Vec::new();
@@ -112,8 +116,12 @@ fn get_phases(times: &Vec<f64>, period: f64) -> Vec<f64> {
     phases
 }
 
+pub fn trial_periods(t_size: usize) -> Vec<f64> {
+    (2..=t_size).map(|i| i as f64 * 0.5).collect()
+}
+
 pub fn find_candidates
-(lc: CleanLightCurve, trial_periods: &Vec<f64>, n_bins: usize, n_dur: usize) -> Vec<Candidate> {
+(lc: &CleanLightCurve, trial_periods: &Vec<f64>, n_bins: usize, n_dur: usize) -> Vec<Candidate> {
     let mut candidates: Vec<Candidate> = Vec::new();
 
     for &period in trial_periods.iter() {
@@ -154,6 +162,21 @@ pub fn find_candidates
 
     candidates
 }
+
+pub fn transit_estimate(candidates: &Vec<Candidate>) -> Candidate {
+    let mut max_snr = f64::NEG_INFINITY;
+    let mut max_index: usize = 0;
+    for (index, cand) in candidates.iter().enumerate() {
+        let check_snr = cand.snr();
+        if check_snr > max_snr {
+            max_index = index;
+            max_snr = check_snr;
+        }
+    }
+
+    candidates[max_index].clone()
+}
+
 /*
 Temporary find_candidates! I plan to design a better one soon.
 

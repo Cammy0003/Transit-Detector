@@ -1,8 +1,6 @@
 pub mod fits_access;
 pub mod data_cleaner;
 
-use fitsio::FitsFile;
-
 pub struct CleanLightCurve {
     time: Vec<f64>,
     flux: Vec<f64>,
