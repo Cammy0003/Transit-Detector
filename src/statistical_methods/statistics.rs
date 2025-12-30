@@ -19,20 +19,25 @@ pub fn median(data: &[f64]) -> Option<f64> {
     }
 }
 
-
 pub fn median_cadence(times: &[f64]) -> Option<f64> {
-    if times.len() < 2 { return None; }
+    if times.len() < 2 {
+        return None;
+    }
     let mut dts: Vec<f64> = times
         .windows(2)
         .map(|w| w[1] - w[0])
         .filter(|dt| dt.is_finite() && *dt > 0.0)
         .collect();
-    if dts.is_empty() { return None; }
+    if dts.is_empty() {
+        return None;
+    }
     median(&mut dts)
 }
 
 pub fn median_absolute_deviation(arr: &[f64]) -> Option<f64> {
-    if arr.is_empty() { return None; }
+    if arr.is_empty() {
+        return None;
+    }
 
     let med = median(arr)?;
     let mut deviations: Vec<f64> = arr
@@ -42,7 +47,8 @@ pub fn median_absolute_deviation(arr: &[f64]) -> Option<f64> {
         .map(|f| (f - med).abs())
         .collect();
 
-    if deviations.is_empty() { return None; }
+    if deviations.is_empty() {
+        return None;
+    }
     median(&mut deviations)
 }
-

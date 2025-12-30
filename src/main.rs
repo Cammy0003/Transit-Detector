@@ -1,12 +1,10 @@
+pub mod candidacy;
 pub mod data_access;
 pub mod statistical_methods;
-pub mod candidacy;
 
-use data_access::{CleanLightCurve, fits_access, data_cleaner};
+use data_access::{CleanLightCurve, data_cleaner, fits_access};
 
-use candidacy::finding_candidates::{Candidate, find_candidates, trial_periods, transit_estimate};
-
-
+use candidacy::finding_candidates::{Candidate, find_candidates, transit_estimate, trial_periods};
 
 fn main() {
     // println!("in main.rs");
@@ -29,5 +27,4 @@ fn main() {
     let transit: Candidate = transit_estimate(&candidates);
 
     println!("\ntransit estimate:\n {}", transit);
-
 }

@@ -1,10 +1,10 @@
-pub mod fits_access;
 pub mod data_cleaner;
+pub mod fits_access;
 
 pub struct CleanLightCurve {
     time: Vec<f64>,
     flux: Vec<f64>,
-    sigma: f64
+    sigma: f64,
 }
 
 impl CleanLightCurve {
@@ -24,4 +24,3 @@ impl CleanLightCurve {
         self.sigma
     }
 }
-

@@ -2,11 +2,10 @@ use crate::statistical_methods::statistics::{median, median_absolute_deviation, 
 
 struct NormSegment {
     f_norm: Vec<f64>,
-    med: f64,
     sigma: f64,
 }
 impl NormSegment {
-    fn segment_noise_clean(&mut self, k: f64){
+    fn segment_noise_clean(&mut self, k: f64) {
         let threshold = k * self.sigma;
 
         for f in self.f_norm.iter_mut() {
@@ -27,7 +26,10 @@ pub enum CleanDataError {
     MadFailedAll,
 }
 
-fn normalize_segments(f: &[f64], segments: &[(usize, usize)]) -> Result<Vec<NormSegment>, CleanDataError> {
+fn normalize_segments(
+    f: &[f64],
+    segments: &[(usize, usize)],
+) -> Result<Vec<NormSegment>, CleanDataError> {
     let mut out = Vec::with_capacity(segments.len());
 
     for &(s, e) in segments {
@@ -37,7 +39,11 @@ fn normalize_segments(f: &[f64], segments: &[(usize, usize)]) -> Result<Vec<Norm
         let f_seg = &f[s..e]; // e is exclusive
         let med = median(&f_seg).ok_or(CleanDataError::EmptySegment { start: s, end: e })?;
         if !med.is_finite() || med == 0.0 {
-            return Err(CleanDataError::BadSegmentMedian { start: s, end: e, med });
+            return Err(CleanDataError::BadSegmentMedian {
+                start: s,
+                end: e,
+                med,
+            });
         }
         let inv = 1.0 / med;
         let f_norm: Vec<f64> = f_seg.iter().map(|&f| inv * f - 1.0).collect();
@@ -45,11 +51,7 @@ fn normalize_segments(f: &[f64], segments: &[(usize, usize)]) -> Result<Vec<Norm
             .ok_or(CleanDataError::MadFailedSegment { start: s, end: e })?;
         let sigma = 1.4826 * mad;
 
-        out.push(NormSegment {
-            f_norm,
-            med,
-            sigma,
-        });
+        out.push(NormSegment { f_norm, sigma });
     }
     Ok(out)
 }
@@ -58,11 +60,13 @@ fn segment_on_gaps(t: &[f64], dt_med: f64, gap_factor: f64) -> Vec<(usize, usize
     let mut segment_bounds: Vec<(usize, usize)> = Vec::new();
     let threshold = dt_med * gap_factor;
 
-    if t.is_empty() { return segment_bounds; }
+    if t.is_empty() {
+        return segment_bounds;
+    }
 
     let mut start = 0;
     for i in 1..t.len() {
-        if (t[i] - t[i-1]) > threshold {
+        if (t[i] - t[i - 1]) > threshold {
             segment_bounds.push((start, i));
             start = i;
         }
@@ -72,8 +76,14 @@ fn segment_on_gaps(t: &[f64], dt_med: f64, gap_factor: f64) -> Vec<(usize, usize
     segment_bounds
 }
 
-pub fn clean_data(flux: Vec<f64>, times: &Vec<f64>, k: f64) -> Result<(Vec<f64>, f64), CleanDataError> {
-    if times.is_empty() { return Err(CleanDataError::EmptyTimes) }
+pub fn clean_data(
+    flux: Vec<f64>,
+    times: &Vec<f64>,
+    k: f64,
+) -> Result<(Vec<f64>, f64), CleanDataError> {
+    if times.is_empty() {
+        return Err(CleanDataError::EmptyTimes);
+    }
 
     let dt_med = median_cadence(&times).ok_or(CleanDataError::MedianCadenceFailed)?;
     let gap_factor = 5.0;

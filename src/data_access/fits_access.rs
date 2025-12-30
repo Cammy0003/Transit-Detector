@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 #[derive(Debug)]
 pub enum FitsError {
     NotFitsFile,
-    Fitsio(errors::Error)
+    Fitsio(errors::Error),
 }
 
 impl From<errors::Error> for FitsError {
@@ -36,17 +36,15 @@ fn load_tess_data(fptr: &mut FitsFile) -> Result<(Vec<f64>, Vec<f64>, Vec<i32>),
 }
 
 fn filter_and_sort_tess_data(
-    flux: Vec<f64>, time: Vec<f64>, qual: Vec<i32>
-)
-    -> Result<(Vec<f64>, Vec<f64>), FitsError> {
+    flux: Vec<f64>,
+    time: Vec<f64>,
+    qual: Vec<i32>,
+) -> Result<(Vec<f64>, Vec<f64>), FitsError> {
     let good_indices: Vec<usize> = (0..time.len())
         .filter(|&i| qual[i] == 0 && time[i].is_finite() && flux[i].is_finite())
         .collect();
 
-    let mut paired: Vec<(f64, f64)> = good_indices
-        .iter()
-        .map(|&i| (time[i], flux[i]))
-        .collect();
+    let mut paired: Vec<(f64, f64)> = good_indices.iter().map(|&i| (time[i], flux[i])).collect();
 
     paired.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
 
@@ -78,9 +76,11 @@ pub mod test {
 
         let (t, f) = fits_access::filter_and_sort_tess_data(f, t, q).expect("Error filtering data");
         assert_eq!(t.len(), f.len(), "time/flux length mismatch");
-        assert!(t.iter().all(|&val| !val.is_nan() && val.is_finite()), "NaN or infinite in t");
+        assert!(
+            t.iter().all(|&val| !val.is_nan() && val.is_finite()),
+            "NaN or infinite in t"
+        );
         assert!(f.iter().all(|&val| !val.is_nan()), "NaN detected in f");
         assert!(t.windows(2).all(|w| w[1] > w[0]), "t is not chronological");
     }
-
 }
