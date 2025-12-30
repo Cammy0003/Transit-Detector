@@ -186,4 +186,3 @@ pub fn transit_estimate(candidates: &Vec<Candidate>) -> Candidate {
 
     candidates[max_index].clone()
 }
-

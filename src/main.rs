@@ -7,10 +7,13 @@ use data_access::{CleanLightCurve, data_cleaner, fits_access};
 use candidacy::finding_candidates::{Candidate, find_candidates, transit_estimate, trial_periods};
 
 fn main() {
-    // println!("in main.rs");
-    // fits_access::test::testing_fits();
-    let file_name = "tess2025180145000-s0094-0000000006286534-0291-s_lc.fits";
-    let (t, f) = fits_access::get_data(file_name).expect("Error getting data");
+    let fits_names = fits_access::fits_attainment().expect("Error getting fits");
+    if fits_names.is_empty() {
+        println!("No Fits Files");
+        return;
+    }
+    let file_name = &fits_names[0];
+    let (t, f) = fits_access::get_data(&file_name).expect("Error getting data");
     const K: f64 = 6.0;
     let (f_clean, sigma) = data_cleaner::clean_data(f, &t, K).expect("Error cleaning data");
 

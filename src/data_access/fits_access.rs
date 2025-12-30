@@ -1,15 +1,22 @@
 use fitsio::{FitsFile, errors};
-use std::path::{Path, PathBuf};
+use std::{fs, path::Path, path::PathBuf};
 
 #[derive(Debug)]
 pub enum FitsError {
     NotFitsFile,
     Fitsio(errors::Error),
+    Io(std::io::Error),
 }
 
 impl From<errors::Error> for FitsError {
     fn from(err: errors::Error) -> Self {
         FitsError::Fitsio(err)
+    }
+}
+
+impl From<std::io::Error> for FitsError {
+    fn from(e: std::io::Error) -> Self {
+        FitsError::Io(e)
     }
 }
 
@@ -21,7 +28,7 @@ fn get_fits_ptr(file_name: &str) -> Result<FitsFile, FitsError> {
 
     let fits_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("data")
-        .join("test")
+        .join("fits_files")
         .join(file_name);
     let fptr = FitsFile::open(fits_path).map_err(FitsError::Fitsio)?;
     Ok(fptr)
@@ -59,6 +66,31 @@ pub fn get_data(file_name: &str) -> Result<(Vec<f64>, Vec<f64>), FitsError> {
 
     let (t, f) = filter_and_sort_tess_data(f, t, q).expect("Error filtering data");
     Ok((t, f))
+}
+
+pub fn fits_attainment() -> Result<Vec<String>, FitsError> {
+    println!("Welcome to Transit Detector By Cammy CORP!");
+    println!("Please place all fits files within the data/fits_files directory");
+
+    let mut fits_names: Vec<String> = Vec::new();
+
+    let origin = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("data")
+        .join("fits_files");
+
+    for entry in fs::read_dir(origin)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.extension().and_then(|e| e.to_str()) != Some("fits") {
+            return Err(FitsError::NotFitsFile);
+        }
+        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+            fits_names.push(name.to_string());
+        }
+    }
+
+    Ok(fits_names)
 }
 
 #[cfg(test)]
