@@ -20,7 +20,8 @@ but it is expected that the program will at least detect more obvious transits.
 
 ## How to Run:
 
-
+Place relevant fits files into `data/fits_files` directory, then run `main.rs` through cargo. Note, that this will just 
+analyze a single fits file for now, and I'll have an update such that one can analyze multiple files.  
 
 ---
 

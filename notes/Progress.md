@@ -138,3 +138,11 @@
    
 
 ---
+
+## Dec 29 2025
+
+1. **Reorganized Everything**
+
+   Created separate files and other structs and stuff, and moved everything from what was once on main
+   into such. 
+2. 
