@@ -2,7 +2,7 @@ pub mod candidacy;
 pub mod data_access;
 pub mod statistical_methods;
 
-use data_access::{CleanLightCurve, data_cleaner, fits_access};
+use data_access::{clean_light_curve::CleanLightCurve, data_cleaner, fits_access};
 
 use candidacy::finding_candidates::{Candidate, find_candidates, transit_estimate, trial_periods};
 

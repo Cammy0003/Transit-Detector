@@ -21,7 +21,15 @@ but it is expected that the program will at least detect more obvious transits.
 ## How to Run:
 
 Place relevant fits files into `data/fits_files` directory, then run `main.rs` through cargo. Note, that this will just 
-analyze a single fits file for now, and I'll have an update such that one can analyze multiple files.  
+analyze a single fits file for now, and I'll have an update such that one can analyze multiple files. 
+
+After some time, if you've especially done an update on your dependencies recently, make sure to run,
+
+```terminaloutput
+cargo clean
+```
+
+to get rid of any cache that could affect compilation.
 
 ---
 

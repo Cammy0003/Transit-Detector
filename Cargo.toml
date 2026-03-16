@@ -1,5 +1,5 @@
 [package]
-name = "transit_detector_draft_1"
+name = "transit_detector_v1_1"
 version = "0.1.0"
 edition = "2024"
 

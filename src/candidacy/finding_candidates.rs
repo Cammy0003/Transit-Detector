@@ -1,4 +1,4 @@
-use crate::data_access::CleanLightCurve;
+use crate::data_access::clean_light_curve::CleanLightCurve;
 use std::fmt::Display;
 
 #[derive(Copy, Clone, Default)]
@@ -129,7 +129,7 @@ pub fn trial_periods(t_size: usize) -> Vec<f64> {
 }
 
 pub fn find_candidates(
-    lc: &CleanLightCurve,
+    lc: &CleanLightCurve,   // from data_access
     trial_periods: &Vec<f64>,
     n_bins: usize,
     n_dur: usize,
