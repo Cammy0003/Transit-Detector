@@ -1,53 +1,5 @@
+use crate::candidacy::exoplanet::Candidate;
 use crate::data_access::clean_light_curve::CleanLightCurve;
-use std::fmt::Display;
-
-#[derive(Copy, Clone, Default)]
-pub struct Candidate {
-    period: f64,
-    snr: f64,
-    duration: f64,
-    phase: f64,
-}
-
-impl Candidate {
-    fn new(period: f64, snr: f64, duration: f64, phase: f64) -> Candidate {
-        Candidate {
-            period,
-            snr,
-            duration,
-            phase,
-        }
-    }
-
-    fn snr(&self) -> f64 {
-        self.snr
-    }
-
-    #[allow(dead_code)]
-    fn duration(&self) -> f64 {
-        self.duration
-    }
-
-    #[allow(dead_code)]
-    fn phase(&self) -> f64 {
-        self.phase
-    }
-
-    #[allow(dead_code)]
-    fn period(&self) -> f64 {
-        self.period
-    }
-}
-
-impl Display for Candidate {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "Period = {} days, SNR = {}, Duration = {} hrs, Phase = {}",
-            self.period, self.snr, self.duration, self.phase
-        )
-    }
-}
 
 fn signal_to_noise_ratio(deepest_dip: f64, num_points: u32, sigma: f64) -> Option<f64> {
     let snr = (-deepest_dip / sigma) * (num_points as f64).sqrt();
@@ -129,7 +81,7 @@ pub fn trial_periods(t_size: usize) -> Vec<f64> {
 }
 
 pub fn find_candidates(
-    lc: &CleanLightCurve,   // from data_access
+    lc: &CleanLightCurve, // from data_access
     trial_periods: &Vec<f64>,
     n_bins: usize,
     n_dur: usize,

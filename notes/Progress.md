@@ -145,4 +145,15 @@
 
    Created separate files and other structs and stuff, and moved everything from what was once on main
    into such. 
-2. 
+
+---
+
+## March 16 2026
+
+1. **Reorganizing types**
+   
+   To prepare myself for the eventual addition of binary star checks, I am reformating
+   the types, to include markers that distinguish between such systems that are exoplanets, and
+   others that aren't. Still not complete and doesn't compile as such, but I'll get it done soon... I think.
+
+---
